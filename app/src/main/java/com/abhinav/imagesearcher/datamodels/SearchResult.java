@@ -45,4 +45,20 @@ public class SearchResult {
     public ArrayList<Photo> getImages() {
         return mImages;
     }
+
+    public int getTotalImages() {
+        return mTotal;
+    }
+
+    public int getTotalPages() {
+        return mPages;
+    }
+
+    public int getPage() {
+        return mPage;
+    }
+
+    public int getPerPageCount() {
+        return mPerPage;
+    }
 }

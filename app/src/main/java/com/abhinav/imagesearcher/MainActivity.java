@@ -1,11 +1,13 @@
 package com.abhinav.imagesearcher;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 
@@ -40,6 +42,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 SearchManager.getInstance().clearRequestQueue();
                 initScrollView(mRecyclerView, mAdapter, photoList, scrollListener, mSearchTerm.getText().toString());
+                InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(mSearchTerm.getWindowToken(), 0);
             }
         });
         // Configure the RecyclerView

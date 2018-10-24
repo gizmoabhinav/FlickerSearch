@@ -106,7 +106,7 @@ public class SearchManager {
         }
     }
 
-    private String createUrl(String query, int page) {
+    public String createUrl(String query, int page) {
         Uri.Builder builder = new Uri.Builder();
         builder.scheme("https")
                 .authority("api.flickr.com")
@@ -116,7 +116,7 @@ public class SearchManager {
                 .appendQueryParameter("api_key", API_KEY)
                 .appendQueryParameter("format", "json")
                 .appendQueryParameter("nojsoncallback", "1")
-                .appendQueryParameter("safesearch", "1")
+                .appendQueryParameter("safe_search", "1")
                 .appendQueryParameter("text", query)
                 .appendQueryParameter("page", String.valueOf(page))
                 .appendQueryParameter("per_page", String.valueOf(RESULTS_PER_PAGE));
