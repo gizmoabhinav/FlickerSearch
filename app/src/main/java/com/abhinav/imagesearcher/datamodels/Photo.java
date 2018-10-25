@@ -20,7 +20,7 @@ public class Photo {
 
     private Photo() {}
 
-    /*
+    /**
      * Deserialize json object from result to get a Photo object
      * @param object Json object from search response corresponding to one photo
      * @return Photo object
@@ -35,7 +35,7 @@ public class Photo {
         return photo;
     }
 
-    /*
+    /**
      * Return title of the photo
      * @return String title
      */
@@ -43,7 +43,7 @@ public class Photo {
         return mTitle;
     }
 
-    /*
+    /**
      * Constructs a url from Photo properties to fetch the photo bitmap
      * @return String url for the given photo object
      */
@@ -51,7 +51,7 @@ public class Photo {
         return String.format(URL_FORMAT, mFarm, mServer, mId, mSecret);
     }
 
-    /*
+    /**
      * Return id of the photo
      * @return String id
      */

@@ -144,6 +144,7 @@ public class SearchManager {
      * This function builds a request url for the given search query and page.
      * @param query String query for search
      * @param page integer page value
+     * @return url request string for image search
      */
     public String createUrl(String query, int page) {
         Uri.Builder builder = new Uri.Builder();
