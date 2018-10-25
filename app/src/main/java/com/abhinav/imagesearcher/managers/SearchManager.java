@@ -56,7 +56,8 @@ public class SearchManager {
                     public void onResponse(String response) {
                         try {
                             JSONObject responseObject = new JSONObject(response);
-                            resultListener.onResultReceived(SearchResult.deserialize(responseObject).getImages());
+                            SearchResult result = SearchResult.deserialize(responseObject);
+                            resultListener.onResultReceived(result.getImages(), result.getPage()<result.getTotalPages());
                         } catch (JSONException e) {
                             Log.e(LOG_TAG, "exception while processing result json for " + page +
                                     " for query " + query + " error: " + e.getMessage());
@@ -138,7 +139,7 @@ public class SearchManager {
     }
 
     public interface ISearchResultListener {
-        void onResultReceived(List<Photo> photo);
+        void onResultReceived(List<Photo> photo, boolean hasNext);
         void onError();
     }
 

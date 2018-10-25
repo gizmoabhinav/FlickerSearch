@@ -13,6 +13,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.abhinav.imagesearcher.datamodels.Photo;
 import com.abhinav.imagesearcher.managers.SearchManager;
@@ -27,9 +28,10 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String LOG_TAG = "MainActivity";
 
-    private List<Photo> photoList = new ArrayList<>();
+    private List<Photo> mPhotoList = new ArrayList<>();
+    private boolean mMaxPhotosReached = false;
 
-    private RecyclerViewOnScrollListener scrollListener;
+    private RecyclerViewOnScrollListener mScrollListener;
     private RecyclerViewAdapter mAdapter;
     private RecyclerView mRecyclerView;
     private TextView mNoNetworkView;
@@ -49,16 +51,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 SearchManager.getInstance().clearRequestQueue();
-                initScrollView(mRecyclerView, mAdapter, photoList, scrollListener, mSearchTerm.getText().toString());
+                initScrollView(mSearchTerm.getText().toString());
                 InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
                 imm.hideSoftInputFromWindow(mSearchTerm.getWindowToken(), 0);
             }
         });
     }
 
-    private void initScrollView(RecyclerView recyclerView, RecyclerView.Adapter adapter,
-                                final List<Photo> photoList, RecyclerViewOnScrollListener scrollListener,
-                                final String query) {
+    private void initScrollView(final String query) {
         Log.i(LOG_TAG, "requested search for query " + query);
         if (!NetworkUtils.isNetworkConnected(this)) {
             Log.i(LOG_TAG, "no network connection, aborting search");
@@ -69,31 +69,40 @@ public class MainActivity extends AppCompatActivity {
             mRecyclerView.setVisibility(View.VISIBLE);
             mNoNetworkView.setVisibility(View.GONE);
         }
-        adapter = new RecyclerViewAdapter(photoList);
+        mAdapter = new RecyclerViewAdapter(mPhotoList);
         GridLayoutManager layoutManager = new GridLayoutManager(this, 3);
-        recyclerView.setLayoutManager(layoutManager);
-        recyclerView.setAdapter(adapter);
-        scrollListener = new RecyclerViewOnScrollListener(layoutManager) {
+        mRecyclerView.setLayoutManager(layoutManager);
+        mRecyclerView.setAdapter(mAdapter);
+        mScrollListener = new RecyclerViewOnScrollListener(layoutManager) {
             @Override
             public void onLoadMore(int page, int totalItemsCount, RecyclerView view) {
-                loadNextResults(query, page, view.getAdapter(), photoList);
+                if (!mMaxPhotosReached) {
+                    loadNextResults(query, page);
+                } else {
+                    Toast.makeText(getApplicationContext(), R.string.end_of_list_message, Toast.LENGTH_LONG).show();
+                }
             }
         };
-        photoList.clear();
-        adapter.notifyDataSetChanged();
-        scrollListener.resetState();
-        recyclerView.addOnScrollListener(scrollListener);
-        loadNextResults(query, 1, adapter, photoList);
+        mPhotoList.clear();
+        mMaxPhotosReached = false;
+        mAdapter.notifyDataSetChanged();
+        mScrollListener.resetState();
+        mRecyclerView.addOnScrollListener(mScrollListener);
+        loadNextResults(query, 1);
     }
 
-    private void loadNextResults(final String query, final int page, final RecyclerView.Adapter adapter, final List<Photo> photoList) {
+    private void loadNextResults(final String query, final int page) {
         Log.d(LOG_TAG, "Fetching search result page " + page + " for query " + query);
         SearchManager.getInstance().getResult(query, page, this, new SearchManager.ISearchResultListener() {
             @Override
-            public void onResultReceived(List<Photo> photos) {
-                photoList.addAll(photos);
-                adapter.notifyItemRangeChanged(photoList.size() - photos.size(), photos.size());
-                queueImageDownload(photos, photoList.size() - photos.size(), adapter, photoList);
+            public void onResultReceived(List<Photo> photos, boolean hasNext) {
+                if(photos.size() == 0) {
+                    Toast.makeText(getApplicationContext(), R.string.no_images_message, Toast.LENGTH_LONG).show();
+                }
+                mPhotoList.addAll(photos);
+                mMaxPhotosReached = !hasNext;
+                mAdapter.notifyItemRangeChanged(mPhotoList.size() - photos.size(), photos.size());
+                queueImageDownload(photos, mPhotoList.size() - photos.size());
             }
 
             @Override
@@ -103,19 +112,19 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void queueImageDownload(List<Photo> photos, final int startIndex, final RecyclerView.Adapter adapter, final List<Photo> photoList) {
+    private void queueImageDownload(List<Photo> photos, final int startIndex) {
         SearchManager.getInstance().getBitmaps(photos, startIndex, this, new SearchManager.IimageDownloadResultListener() {
             @Override
             public void onResultReceived(Bitmap bitmap, int index) {
-                photoList.get(index).setBitmap(bitmap);
-                adapter.notifyItemChanged(index);
+                mPhotoList.get(index).setBitmap(bitmap);
+                mAdapter.notifyItemChanged(index);
             }
 
             @Override
             public void onError(int index) {
                 Log.e(LOG_TAG, "Couldn't load image at index " + index);
-                photoList.get(index).setBitmap(BitmapFactory.decodeResource(getResources(), R.drawable.error));
-                adapter.notifyItemChanged(index);
+                mPhotoList.get(index).setBitmap(BitmapFactory.decodeResource(getResources(), R.drawable.error));
+                mAdapter.notifyItemChanged(index);
             }
         });
     }

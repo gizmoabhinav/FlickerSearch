@@ -37,9 +37,10 @@ public class SearchManagerInstrumentedTest {
         final List<Photo> photoList = new ArrayList<>();
         SearchManager.getInstance().getResult("kittens", 1, appContext, new SearchManager.ISearchResultListener() {
             @Override
-            public void onResultReceived(List<Photo> photo) {
+            public void onResultReceived(List<Photo> photo, boolean hasNext) {
                 assertNotNull(photo);
                 assertNotNull(photo.get(0));
+                assertTrue(hasNext);
                 photoList.add(photo.get(0));
             }
 
