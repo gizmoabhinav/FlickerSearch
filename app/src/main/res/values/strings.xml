@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Image Searcher</string>
+    <string name="no_network_message">No network detected</string>
 </resources>

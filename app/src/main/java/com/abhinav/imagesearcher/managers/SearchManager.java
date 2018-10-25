@@ -3,6 +3,7 @@ package com.abhinav.imagesearcher.managers;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.util.Log;
 import android.widget.ImageView;
 
 import com.abhinav.imagesearcher.datamodels.Photo;
@@ -23,12 +24,12 @@ import java.util.List;
 
 public class SearchManager {
 
+    private static final String LOG_TAG = "SearchManager";
     private static final String API_KEY = "3e7cc266ae2b0e0d78e279ce8e361736";
     private static final int RESULTS_PER_PAGE = 30;
     private static volatile SearchManager sInstance;
 
     private RequestQueue requestQueue;
-
 
     private SearchManager() {
     }
@@ -44,7 +45,7 @@ public class SearchManager {
         return sInstance;
     }
 
-    public void getResult(String query, int page, final Context context, final ISearchResultListener resultListener) {
+    public void getResult(final String query, final int page, final Context context, final ISearchResultListener resultListener) {
         if (requestQueue == null) {
             requestQueue = Volley.newRequestQueue(context);
         }
@@ -57,6 +58,8 @@ public class SearchManager {
                             JSONObject responseObject = new JSONObject(response);
                             resultListener.onResultReceived(SearchResult.deserialize(responseObject).getImages());
                         } catch (JSONException e) {
+                            Log.e(LOG_TAG, "exception while processing result json for " + page +
+                                    " for query " + query + " error: " + e.getMessage());
                             resultListener.onError();
                         }
                     }
@@ -93,7 +96,7 @@ public class SearchManager {
                     new Response.ErrorListener() { // Error listener
                         @Override
                         public void onErrorResponse(VolleyError error) {
-                            resultListener.onError();
+                            resultListener.onError(photoIndex);
                         }
                     }
             );
@@ -141,6 +144,6 @@ public class SearchManager {
 
     public interface IimageDownloadResultListener {
         void onResultReceived(Bitmap bitmap, int index);
-        void onError();
+        void onError(int index);
     }
 }
