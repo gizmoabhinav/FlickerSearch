@@ -4,11 +4,22 @@ import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 
+/**
+ * Extension of the recycler view on scroll listener to provide callback
+ * when we approach towards the end of the list
+ */
 public abstract class RecyclerViewOnScrollListener extends RecyclerView.OnScrollListener {
 
+    // initialize the current page and increment index
     private int currentPage = 1;
+
+    // previous value of total item count in the list
     private int previousTotalItemCount = 0;
+
+    // shows that the request for more results is queued
     private boolean loading = true;
+
+    // index of the starting page of search
     private int startingPageIndex = 1;
 
     private RecyclerView.LayoutManager mLayoutManager;
@@ -35,6 +46,7 @@ public abstract class RecyclerViewOnScrollListener extends RecyclerView.OnScroll
                 this.loading = true;
             }
         }
+
         // If it’s still loading, we check to see if the dataset count has
         // changed, if so we conclude it has finished loading and update the current page
         // number and total item count.
@@ -43,18 +55,22 @@ public abstract class RecyclerViewOnScrollListener extends RecyclerView.OnScroll
             previousTotalItemCount = totalItemCount;
         }
 
-        // If it isn’t currently loading, we check to see if we have breached
-        // the visibleThreshold and need to reload more data.
-        // If we do need to reload some more data, we execute onLoadMore to fetch the data.
-        // threshold should reflect how many total columns there are too
-        int visibleThreshold = 20;
+        // If the total number of items is less than what is visible on screen
+        // plus an extra threshold value, trigger loading of more items
+        int visibleThreshold = 30;
         if (!loading && (lastVisibleItemPosition + visibleThreshold) > totalItemCount) {
+            // increment the current page count
             currentPage++;
+            // provide callback to load more images and set loading to true
             onLoadMore(currentPage, totalItemCount, view);
             loading = true;
         }
     }
 
+    /**
+     * This method is for resetting the state
+     * at the beginning of a new search
+     */
     public void resetState() {
         this.currentPage = this.startingPageIndex;
         this.previousTotalItemCount = 0;

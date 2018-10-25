@@ -6,17 +6,19 @@
     android:clickable="true"
     android:focusable="true"
     android:orientation="vertical">
-    <ImageView
+
+    <com.android.volley.toolbox.NetworkImageView
         android:id="@+id/imageView"
         android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:gravity="top"
-        android:layout_height="wrap_content" />
+        android:src="@drawable/placeholder" />
 
     <TextView
         android:id="@+id/titleView"
-        android:layout_below="@id/imageView"
         android:layout_width="match_parent"
-        android:textColor="@color/colorPrimaryDark"
-        android:layout_height="20dp"/>
+        android:layout_height="20dp"
+        android:layout_below="@id/imageView"
+        android:textColor="@color/colorPrimaryDark" />
 </RelativeLayout>

@@ -17,16 +17,15 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 /**
- * Example local unit test, which will execute on the development machine (host).
- *
- * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
+ * local unit test, which will test datamodels deserialization.
  */
 public class DataModelUnitTest {
 
-    JSONObject mResponseJson;
+    private JSONObject mResponseJson;
 
     @Before
     public void createJson() {
+        // read from dummy flicker search result file and create json
         InputStream inputStream = this.getClass().getResourceAsStream("/response.json");
         try {
             BufferedReader streamReader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
@@ -44,6 +43,8 @@ public class DataModelUnitTest {
 
     @Test
     public void readJson_isCorrect() throws Exception {
+
+        // Verify datamodels get initialized with expected values
         SearchResult result = SearchResult.deserialize(mResponseJson);
 
         assertEquals(200968, result.getTotalImages());

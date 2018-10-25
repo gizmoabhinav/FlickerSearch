@@ -4,36 +4,64 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Log;
-import android.widget.ImageView;
+import android.util.LruCache;
 
+import com.abhinav.imagesearcher.R;
 import com.abhinav.imagesearcher.datamodels.Photo;
 import com.abhinav.imagesearcher.datamodels.SearchResult;
+import com.android.volley.Cache;
 import com.android.volley.DefaultRetryPolicy;
+import com.android.volley.Network;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
-import com.android.volley.toolbox.ImageRequest;
-import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
+import com.android.volley.toolbox.BasicNetwork;
+import com.android.volley.toolbox.DiskBasedCache;
+import com.android.volley.toolbox.HurlStack;
+import com.android.volley.toolbox.ImageLoader;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.NetworkImageView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.List;
 
+/**
+ * This class manages the flicker images search request and image load request queuing
+ * and provides callback to view when the response arrives. This class
+ * also handles caching of the responses and images to prevent duplicate
+ * network calls
+ */
 public class SearchManager {
 
     private static final String LOG_TAG = "SearchManager";
+
+    // API key for flicker search api
     private static final String API_KEY = "3e7cc266ae2b0e0d78e279ce8e361736";
+
+    // The number of photos needed per page/request
     private static final int RESULTS_PER_PAGE = 30;
+
+    // Search Manager singleton object
     private static volatile SearchManager sInstance;
 
-    private RequestQueue requestQueue;
+    // Queue for search requests and image download requests
+    // This queue executes the requests in maximum of 4 threads
+    // This also keeps a disk based cache for preventing duplicate
+    // network requests
+    private RequestQueue mRequestQueue;
 
-    private SearchManager() {
-    }
+    // Image downloader which keeps an in-memory LRU cache for
+    // images already downloaded
+    private ImageLoader mImageLoader;
 
+    private SearchManager() {}
+
+    /**
+     * Returns SearchManager singleton object
+     */
     public static SearchManager getInstance() {
         if (sInstance == null) {
             synchronized (SearchManager.class) {
@@ -45,22 +73,37 @@ public class SearchManager {
         return sInstance;
     }
 
-    public void getResult(final String query, final int page, final Context context, final ISearchResultListener resultListener) {
-        if (requestQueue == null) {
-            requestQueue = Volley.newRequestQueue(context);
+    /**
+     * This method queues request for search for a given query and page
+     * and returns a callback after getting the result images
+     * @param query String for search
+     * @param page integer page value
+     * @param context activity context
+     * @param resultListener ISearchResultListener object to give callback
+     */
+    public void queueForSearchResult(final String query, final int page, final Context context, final ISearchResultListener resultListener) {
+        // initialize queue
+        if (mRequestQueue == null) {
+            createRequestQueue(context);
         }
-        StringRequest stringRequest = new StringRequest(Request.Method.GET,
+
+        // create request object and set callbacks on receiving response callback
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET,
                 createUrl(query, page),
-                new Response.Listener<String>() {
+                null,
+                new Response.Listener<JSONObject>() {
                     @Override
-                    public void onResponse(String response) {
+                    public void onResponse(JSONObject response) {
                         try {
-                            JSONObject responseObject = new JSONObject(response);
-                            SearchResult result = SearchResult.deserialize(responseObject);
-                            resultListener.onResultReceived(result.getImages(), result.getPage()<result.getTotalPages());
+                            // Deserialize the search result response
+                            SearchResult result = SearchResult.deserialize(response);
+                            // provide callback with list of images and if there are more pages ahead to search
+                            resultListener.onResultReceived(result.getImages(), (result.getPage() < result.getTotalPages()));
+
                         } catch (JSONException e) {
                             Log.e(LOG_TAG, "exception while processing result json for " + page +
                                     " for query " + query + " error: " + e.getMessage());
+                            // provide error callback if deserialization fails
                             resultListener.onError();
                         }
                     }
@@ -68,48 +111,40 @@ public class SearchManager {
                 new Response.ErrorListener() {
                     @Override
                     public void onErrorResponse(VolleyError error) {
+                        // provide error callback if request returns error response
                         resultListener.onError();
                     }
                 });
-        requestQueue.add(stringRequest);
+
+        // set request timeout to 5secs and request retries to 2
+        request.setRetryPolicy(new DefaultRetryPolicy(DefaultRetryPolicy.DEFAULT_TIMEOUT_MS * 2,
+                DefaultRetryPolicy.DEFAULT_MAX_RETRIES * 2,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+
+        // queue the request
+        mRequestQueue.add(request);
     }
 
-    public void getBitmaps(List<Photo> photos, int startIndex, Context context, final IimageDownloadResultListener resultListener) {
-        if (requestQueue == null) {
-            requestQueue = Volley.newRequestQueue(context);
-        }
-        for(final Photo photo : photos) {
-            final int photoIndex = startIndex;
-            String url = photo.getUrl();
-            ImageRequest imageRequest = new ImageRequest(
-                    url, // Image URL
-                    new Response.Listener<Bitmap>() { // Bitmap listener
-                        @Override
-                        public void onResponse(Bitmap response) {
-                            photo.setBitmap(response);
-                            resultListener.onResultReceived(response, photoIndex);
-                        }
-                    },
-                    0, // Image width
-                    0, // Image height
-                    ImageView.ScaleType.CENTER_CROP, // Image scale type
-                    Bitmap.Config.RGB_565, //Image decode configuration
-                    new Response.ErrorListener() { // Error listener
-                        @Override
-                        public void onErrorResponse(VolleyError error) {
-                            resultListener.onError(photoIndex);
-                        }
-                    }
-            );
-            imageRequest.setRetryPolicy(new DefaultRetryPolicy(
-                    DefaultRetryPolicy.DEFAULT_TIMEOUT_MS * 4,
-                    DefaultRetryPolicy.DEFAULT_MAX_RETRIES * 2,
-                    DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
-            requestQueue.add(imageRequest);
-            startIndex++;
-        }
+    /**
+     * This function loads the image from a given url after getting a response
+     * and caching the value in an in-memory LRU cache in the given view.
+     * The image download request is not queued if the image is present in the cache.
+     * @param url String url for the image
+     * @param view image view to load the image in
+     */
+    public void setBitmap(String url, NetworkImageView view) {
+        view.setImageUrl(url, mImageLoader);
+        // set default value till the image is not loaded
+        view.setDefaultImageResId(R.drawable.placeholder);
+        // set drawable for when the image request fails
+        view.setErrorImageResId(R.drawable.error);
     }
 
+    /**
+     * This function builds a request url for the given search query and page.
+     * @param query String query for search
+     * @param page integer page value
+     */
     public String createUrl(String query, int page) {
         Uri.Builder builder = new Uri.Builder();
         builder.scheme("https")
@@ -127,9 +162,38 @@ public class SearchManager {
         return builder.build().toString();
     }
 
+    /**
+     * This function initializes the request queue with disk based cache
+     * and the image loader with an in-memory LRU cache
+     * @param context Activity context
+     */
+    private void createRequestQueue(Context context) {
+        // Create disk based cache of 20MB and initialize request queue
+        Cache cache = new DiskBasedCache(context.getCacheDir(), 20 * 1024 * 1024);
+        Network network = new BasicNetwork(new HurlStack());
+        mRequestQueue = new RequestQueue(cache, network);
+        mRequestQueue.start();
+
+        // Create an in-memory LRU cache of size 1/8th of available memory
+        final int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
+        final int cacheSize = maxMemory / 8;
+        mImageLoader = new ImageLoader(mRequestQueue, new ImageLoader.ImageCache() {
+            private final LruCache<String, Bitmap> mCache = new LruCache<>(cacheSize);
+            public void putBitmap(String url, Bitmap bitmap) {
+                mCache.put(url, bitmap);
+            }
+            public Bitmap getBitmap(String url) {
+                return mCache.get(url);
+            }
+        });
+    }
+
+    /**
+     * This function cancels all the requests in the request queue
+     */
     public void clearRequestQueue() {
-        if (requestQueue != null) {
-            requestQueue.cancelAll(new RequestQueue.RequestFilter() {
+        if (mRequestQueue != null) {
+            mRequestQueue.cancelAll(new RequestQueue.RequestFilter() {
                 @Override
                 public boolean apply(Request<?> request) {
                     return true;
@@ -138,13 +202,11 @@ public class SearchManager {
         }
     }
 
+    /**
+     * Interface for listening to search result response
+     */
     public interface ISearchResultListener {
         void onResultReceived(List<Photo> photo, boolean hasNext);
         void onError();
-    }
-
-    public interface IimageDownloadResultListener {
-        void onResultReceived(Bitmap bitmap, int index);
-        void onError(int index);
     }
 }
